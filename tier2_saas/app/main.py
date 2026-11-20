@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from prometheus_client import Gauge, Counter
+from prometheus_fastapi_instrumentator import Instrumentator
 import aiosqlite
 import numpy as np
 import uvicorn
@@ -17,6 +19,19 @@ if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 
 from app import database, auth, aiops
+
+# --- Real-Time Prometheus Observability Metrics ---
+AEGIS_CPU = Gauge("aegis_cpu_percent", "Live CPU utilization (%)", ["tenant_id", "source_id"])
+AEGIS_MEM = Gauge("aegis_memory_percent", "Live Memory utilization (%)", ["tenant_id", "source_id"])
+AEGIS_DISK = Gauge("aegis_disk_percent", "Live Disk utilization (%)", ["tenant_id", "source_id"])
+AEGIS_LATENCY = Gauge("aegis_latency_ms", "Live Network latency (ms)", ["tenant_id", "source_id"])
+AEGIS_PACKET_LOSS = Gauge("aegis_packet_loss_percent", "Live Packet loss (%)", ["tenant_id", "source_id"])
+AEGIS_FAILED_LOGINS = Gauge("aegis_failed_logins_1m", "Failed logins per minute", ["tenant_id", "source_id"])
+AEGIS_INGEST_LATENCY = Gauge("aegis_ingest_latency_ms", "Tier-1 to Tier-2 ingest latency (ms)", ["tenant_id"])
+AEGIS_EVENTS_TOTAL = Counter("aegis_ingested_events_total", "Total sanitized events ingested", ["tenant_id"])
+AEGIS_DUPES_BLOCKED = Counter("aegis_duplicates_blocked_total", "Total duplicate payloads blocked", ["tenant_id"])
+AEGIS_INCIDENTS_TOTAL = Counter("aegis_incidents_created_total", "Total AI-correlated incidents", ["tenant_id"])
+
 
 class ConnectionManager:
     def __init__(self):
@@ -37,8 +52,10 @@ class ConnectionManager:
             except Exception:
                 self.disconnect(tenant_id, ws)
 
+
 manager = ConnectionManager()
 DUPLICATES_BLOCKED = 0
+
 
 async def collector_heartbeat_watchdog():
     """Marks any collector silent for >60s as Poor (Stale Data Protection)."""
@@ -65,6 +82,7 @@ async def collector_heartbeat_watchdog():
                     })
         await asyncio.sleep(10)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.init_db()
@@ -72,6 +90,7 @@ async def lifespan(app: FastAPI):
     watchdog_task = asyncio.create_task(collector_heartbeat_watchdog())
     yield
     watchdog_task.cancel()
+
 
 app = FastAPI(title="Aegis Tier 2 - Central AIOps SaaS Platform", lifespan=lifespan)
 
@@ -82,9 +101,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Expose Prometheus /metrics endpoint
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
 
 class RegisterRequest(BaseModel):
     username: str
@@ -92,13 +116,16 @@ class RegisterRequest(BaseModel):
     company_name: str
     region: str = "in-south"
 
+
 class ForgotRequest(BaseModel):
     username: str
+
 
 class ResetRequest(BaseModel):
     username: str
     code: str
     new_password: str
+
 
 @app.post("/api/v1/auth/login")
 async def login(req: LoginRequest):
@@ -107,18 +134,22 @@ async def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     return result
 
+
 @app.post("/api/v1/auth/register")
 async def register(req: RegisterRequest):
     return await auth.register_user(req.username, req.password, req.company_name, req.region)
+
 
 @app.post("/api/v1/auth/forgot-password")
 async def forgot_password(req: ForgotRequest):
     code = await auth.request_password_reset(req.username)
     return {"message": "Reset code generated", "demo_reset_code": code}
 
+
 @app.post("/api/v1/auth/reset-password")
 async def reset_password(req: ResetRequest):
     return await auth.reset_password(req.username, req.code, req.new_password)
+
 
 @app.post("/api/v1/ingest")
 async def ingest_metadata(event: dict, _=Depends(auth.verify_collector_token)):
@@ -126,6 +157,9 @@ async def ingest_metadata(event: dict, _=Depends(auth.verify_collector_token)):
     global DUPLICATES_BLOCKED
     now = datetime.now(timezone.utc)
     now_utc = now.isoformat()
+
+    t_id = event.get("tenant_id", "unknown")
+    s_id = event.get("source_id", "edge_node")
 
     try:
         ev_time = datetime.fromisoformat(event["event_time_utc"].replace("Z", "+00:00"))
@@ -136,14 +170,29 @@ async def ingest_metadata(event: dict, _=Depends(auth.verify_collector_token)):
     is_new = await database.insert_telemetry_idempotent(event, now_utc, latency_ms)
     if not is_new:
         DUPLICATES_BLOCKED += 1
+        AEGIS_DUPES_BLOCKED.labels(tenant_id=t_id).inc()
         return {"status": "duplicate_ignored", "payload_id": event["payload_id"]}
+
+    # Update Prometheus metrics live
+    m = event.get("metrics", {})
+    sec = event.get("security_summary", {})
+    AEGIS_CPU.labels(tenant_id=t_id, source_id=s_id).set(float(m.get("cpu_pct", 0)))
+    AEGIS_MEM.labels(tenant_id=t_id, source_id=s_id).set(float(m.get("memory_pct", 0)))
+    AEGIS_DISK.labels(tenant_id=t_id, source_id=s_id).set(float(m.get("disk_pct", 0)))
+    AEGIS_LATENCY.labels(tenant_id=t_id, source_id=s_id).set(float(m.get("latency_ms", 0)))
+    AEGIS_PACKET_LOSS.labels(tenant_id=t_id, source_id=s_id).set(float(m.get("packet_loss_pct", 0)))
+    AEGIS_FAILED_LOGINS.labels(tenant_id=t_id, source_id=s_id).set(float(sec.get("failed_logins_1m", 0)))
+    AEGIS_INGEST_LATENCY.labels(tenant_id=t_id).set(latency_ms)
+    AEGIS_EVENTS_TOTAL.labels(tenant_id=t_id).inc()
 
     health_state, health_reason = aiops.evaluate_health_state(event["metrics"], event["security_summary"])
     await database.upsert_collector_health(event, health_state, health_reason, now_utc)
 
     incident = await aiops.run_aiops_pipeline(event)
+    if incident:
+        AEGIS_INCIDENTS_TOTAL.labels(tenant_id=t_id).inc()
 
-    await manager.broadcast_to_tenant(event["tenant_id"], {
+    await manager.broadcast_to_tenant(t_id, {
         "type": "telemetry_update",
         "event": event,
         "ingest_latency_ms": latency_ms,
@@ -152,6 +201,7 @@ async def ingest_metadata(event: dict, _=Depends(auth.verify_collector_token)):
         "incident": incident
     })
     return {"status": "accepted", "payload_id": event["payload_id"], "ingest_latency_ms": latency_ms}
+
 
 @app.get("/api/v1/dashboard")
 async def get_dashboard(user: dict = Depends(auth.verify_user_token)):
@@ -201,6 +251,7 @@ async def get_dashboard(user: dict = Depends(auth.verify_user_token)):
         "remediations": remediations
     }
 
+
 @app.post("/api/v1/remediation/{action_id}/{decision}")
 async def handle_remediation(action_id: str, decision: str, user: dict = Depends(auth.verify_user_token)):
     """Human-approved Autonomous Ops simulation with Rollback & Audit Trail."""
@@ -223,6 +274,7 @@ async def handle_remediation(action_id: str, decision: str, user: dict = Depends
         "approved_by": user["sub"]
     })
     return {"action_id": action_id, "status": new_status, "approved_by": user["sub"]}
+
 
 @app.websocket("/ws/{tenant_id}")
 async def websocket_endpoint(websocket: WebSocket, tenant_id: str):
