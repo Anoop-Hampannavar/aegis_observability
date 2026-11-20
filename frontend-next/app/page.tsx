@@ -11,9 +11,9 @@ import {
   CartesianGrid, Tooltip, BarChart, Bar
 } from "recharts";
 
-const SAAS_API = "http://127.0.0.1:8002";
-const SAAS_WS = "ws://127.0.0.1:8002";
-const TIER1_API = "http://127.0.0.1:8001";
+const SAAS_API = process.env.NEXT_PUBLIC_SAAS_API || "https://aegis-tier2-saas-da03.onrender.com";
+const SAAS_WS = process.env.NEXT_PUBLIC_SAAS_WS || "wss://aegis-tier2-saas-da03.onrender.com";
+const TIER1_API = process.env.NEXT_PUBLIC_TIER1_API || "http://127.0.0.1:8001";
 
 interface User {
   username: string;
