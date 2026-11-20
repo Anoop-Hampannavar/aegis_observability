@@ -700,7 +700,8 @@ export default function AegisEnterprisePlatform() {
           incidents={incidents}
           egress={egress}
           tenantName={user.company_name}
-          collectorId={collectors[0]?.collector_id || "col_nidasoshi_01"}
+          region={user.region}
+          collectorId={collectors[0]?.collector_id || "Standby"}
      />
     </div>
     
