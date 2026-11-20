@@ -12,7 +12,7 @@ import uvicorn
 import database
 import scrubber
 
-SAAS_INGEST_URL = os.getenv("SAAS_INGEST_URL", "http://127.0.0.1:8002/api/v1/ingest")
+SAAS_INGEST_URL = os.getenv(""https://aegis-tier2-saas-da03.onrender.com/api/v1/ingest"", "http://127.0.0.1:8002/api/v1/ingest")
 COLLECTOR_TOKEN = os.getenv("COLLECTOR_TOKEN", "aegis-secret-collector-token-2026")
 TENANT_ID = os.getenv("TENANT_ID", "tenant_fincorp_in")
 REGION = os.getenv("REGION", "in-south")
