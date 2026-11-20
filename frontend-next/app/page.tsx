@@ -4,16 +4,15 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Shield, Activity, Cpu, Network, Lock, AlertTriangle, CheckCircle2,
   RotateCcw, Wifi, WifiOff, Server, LogOut, Zap, Layers, Radio,
-  Fingerprint, Link2, Clock, Sun, Moon, Sparkles, Play, ChevronRight
+  Fingerprint, Link2, Sun, Moon, Sparkles, Play
 } from "lucide-react";
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
-  CartesianGrid, Tooltip, BarChart, Bar
-} from "recharts";
 import EnterpriseModules from "../components/EnterpriseModules";
-const SAAS_API = process.env.NEXT_PUBLIC_SAAS_API || "https://aegis-tier2-saas-da03.onrender.com";
-const SAAS_WS = process.env.NEXT_PUBLIC_SAAS_WS || "wss://aegis-tier2-saas-da03.onrender.com";
-const TIER1_API = process.env.NEXT_PUBLIC_TIER1_API || "https://aegis-tier1-collector.onrender.com/";
+import ObservabilityWorkbench from "../components/ObservabilityWorkbench";
+
+const SAAS_API = (process.env.NEXT_PUBLIC_SAAS_API || "https://aegis-tier2-saas-da03.onrender.com").replace(/\/$/, "");
+const SAAS_WS = (process.env.NEXT_PUBLIC_SAAS_WS || "wss://aegis-tier2-saas-da03.onrender.com").replace(/\/$/, "");
+const TIER1_API = (process.env.NEXT_PUBLIC_TIER1_API || "https://aegis-tier1-collector.onrender.com").replace(/\/$/, "");
+
 interface User {
   username: string;
   tenant_id: string;
@@ -323,13 +322,6 @@ export default function AegisEnterprisePlatform() {
   const collectors = data?.collectors || [];
   const incidents = data?.incidents || [];
   const remediations = data?.remediations || [];
-  const chartData = events.slice(-24).map((e: any) => ({
-    time: e.event_time_utc?.slice(11, 19),
-    cpu: e.cpu_pct,
-    mem: e.memory_pct,
-    latency: e.latency_ms,
-    logins: e.failed_logins_1m
-  }));
 
   const stateBadge = (s: string) => {
     if (s === "Excellent") return "bg-emerald-500/15 text-emerald-600 border-emerald-500/30";
@@ -359,7 +351,6 @@ export default function AegisEnterprisePlatform() {
             </div>
           </div>
 
-          {/* Primary Top Navigation (Clean, Zero Confusion) */}
           <nav className="hidden md:flex items-center gap-1">
             {[
               { id: "overview", label: "Overview", icon: Activity },
@@ -382,7 +373,6 @@ export default function AegisEnterprisePlatform() {
           </nav>
         </div>
 
-        {/* Right Controls: Live SLA + Theme + Logout */}
         <div className="flex items-center gap-2">
           <span className={`hidden sm:flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded-full border ${
             wsConnected ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600" : "bg-rose-500/10 border-rose-500/30 text-rose-500"
@@ -402,7 +392,7 @@ export default function AegisEnterprisePlatform() {
         </div>
       </header>
 
-      {/* ==================== GLOBAL JUDGE LIVE DEMO BAR (ALWAYS ACCESSIBLE) ==================== */}
+      {/* ==================== GLOBAL JUDGE LIVE DEMO BAR ==================== */}
       <div className={`border-b px-4 md:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 ${dark ? "bg-[#080d1a] border-slate-800" : "bg-slate-100/80 border-slate-200"}`}>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={`text-[10px] font-bold uppercase tracking-wider mr-1 flex items-center gap-1 ${textMuted}`}>
@@ -430,7 +420,6 @@ export default function AegisEnterprisePlatform() {
       {/* ==================== MAIN CONTAINER ==================== */}
       <main className="max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6 flex-1">
 
-        {/* Empty Tenant Banner */}
         {collectors.length === 0 && (
           <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${bgCard}`}>
             <div>
@@ -476,52 +465,8 @@ export default function AegisEnterprisePlatform() {
               </div>
             </div>
 
-            {/* Dual Real-Time Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className={`rounded-2xl border p-5 ${bgCard}`}>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-sm font-bold">Real-Time Compute Telemetry (CPU & Memory)</h3>
-                  <span className="text-[11px] font-mono text-teal-600">UTC Ordered</span>
-                </div>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <defs>
-                        <linearGradient id="cpuG" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#0d9488" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#1e293b" : "#e2e8f0"} />
-                      <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} />
-                      <YAxis stroke="#94a3b8" fontSize={10} domain={[0, 100]} />
-                      <Tooltip />
-                      <Area type="monotone" dataKey="cpu" name="CPU %" stroke="#0d9488" strokeWidth={2.5} fill="url(#cpuG)" isAnimationActive={false} />
-                      <Area type="monotone" dataKey="mem" name="Memory %" stroke="#6366f1" strokeWidth={2} fillOpacity={0} isAnimationActive={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className={`rounded-2xl border p-5 ${bgCard}`}>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-sm font-bold">Network Latency (ms) & Auth Anomalies</h3>
-                  <span className="text-[11px] font-mono text-rose-500">Z-Score Watch</span>
-                </div>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#1e293b" : "#e2e8f0"} />
-                      <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} />
-                      <YAxis stroke="#94a3b8" fontSize={10} />
-                      <Tooltip />
-                      <Bar dataKey="latency" name="Latency (ms)" fill="#f43f5e" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                      <Bar dataKey="logins" name="Failed Logins" fill="#f59e0b" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
+            {/* Real-Time Observability Workbench (Traces • Logs • Metrics) */}
+            <ObservabilityWorkbench events={events} egress={egress} />
 
             {/* Trust Boundary Pipeline + Live Metadata Stream */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -689,20 +634,20 @@ export default function AegisEnterprisePlatform() {
           );
         })}
       </nav>
-     <EnterpriseModules
-          metrics={events.map((e: any) => ({
-            cpu: e.cpu_pct,
-            memory: e.memory_pct,
-            latency: e.latency_ms,
-            failed_logins: e.failed_logins_1m,
-          }))}
-          incidents={incidents}
-          egress={egress}
-          tenantName={user.company_name}
-          region={user.region}
-          collectorId={collectors[0]?.collector_id || "Standby"}
-     />
+
+      <EnterpriseModules
+        metrics={events.map((e: any) => ({
+          cpu: e.cpu_pct,
+          memory: e.memory_pct,
+          latency: e.latency_ms,
+          failed_logins: e.failed_logins_1m,
+        }))}
+        incidents={incidents}
+        egress={egress}
+        tenantName={user.company_name}
+        region={user.region}
+        collectorId={collectors[0]?.collector_id || "Standby"}
+      />
     </div>
-    
   );
 }
