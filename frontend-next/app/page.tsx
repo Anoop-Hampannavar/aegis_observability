@@ -690,7 +690,17 @@ export default function AegisEnterprisePlatform() {
           );
         })}
       </nav>
-      <EnterpriseModules metrics={metrics} incidents={incidents} />
+      <EnterpriseModules
+       metrics={events.map((e: any) => ({
+         cpu: e.cpu_pct,
+         memory: e.memory_pct,
+         latency: e.latency_ms,
+         failed_logins: e.failed_logins_1m,
+       }))}
+       incidents={incidents}
+       tenantName={user.company_name}
+       collectorId={collectors[0]?.collector_id || "col_nidasoshi_01"}
+     />
     </div>
     
   );
