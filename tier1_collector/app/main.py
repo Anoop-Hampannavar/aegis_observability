@@ -92,13 +92,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Aegis Tier 1 - Local Collector", lifespan=lifespan)
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 @app.post("/api/local/ingest")
 async def ingest_raw_telemetry(raw_event: dict):
     clean_payload, secrets_found = await process_raw_event(raw_event)
