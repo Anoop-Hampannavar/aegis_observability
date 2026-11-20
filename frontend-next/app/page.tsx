@@ -10,7 +10,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, BarChart, Bar
 } from "recharts";
-
+import EnterpriseModules from "../components/EnterpriseModules";
 const SAAS_API = process.env.NEXT_PUBLIC_SAAS_API || "https://aegis-tier2-saas-da03.onrender.com";
 const SAAS_WS = process.env.NEXT_PUBLIC_SAAS_WS || "wss://aegis-tier2-saas-da03.onrender.com";
 const TIER1_API = process.env.NEXT_PUBLIC_TIER1_API || "http://127.0.0.1:8001";
@@ -691,5 +691,6 @@ export default function AegisEnterprisePlatform() {
         })}
       </nav>
     </div>
+    <EnterpriseModules metrics={telemetry} incidents={incidents} />
   );
 }
