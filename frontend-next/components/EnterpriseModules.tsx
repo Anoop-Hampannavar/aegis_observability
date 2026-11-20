@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 interface EnterpriseModulesProps {
   metrics?: any[];
   incidents?: any[];
   egress?: any;
   tenantName?: string;
+  region?: string;
   collectorId?: string;
 }
 
@@ -14,11 +15,46 @@ export default function EnterpriseModules({
   metrics = [],
   incidents = [],
   egress = null,
-  tenantName = "FinCorp India",
-  collectorId = "col_nidasoshi_01",
+  tenantName = "Workspace",
+  region = "in-south",
+  collectorId = "Standby",
 }: EnterpriseModulesProps) {
   const [showInspector, setShowInspector] = useState(true);
   const [exported, setExported] = useState(false);
+
+  // Auto-configure currency & default SLA rate from logged-in tenant's region
+  const regionConfig = useMemo(() => {
+    if (region === "eu-west") {
+      return { symbol: "€", code: "EUR", locale: "de-DE", defaultRate: 850 };
+    }
+    if (region === "us-east") {
+      return { symbol: "$", code: "USD", locale: "en-US", defaultRate: 950 };
+    }
+    return { symbol: "₹", code: "INR", locale: "en-IN", defaultRate: 22500 };
+  }, [region]);
+
+  const storageKey = `aegis_sla_rate_${tenantName}_${region}`;
+  const [slaRate, setSlaRate] = useState<number>(regionConfig.defaultRate);
+
+  // Sync per-tenant SLA rate automatically whenever a different company logs in
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(storageKey);
+      if (saved !== null && !Number.isNaN(Number(saved))) {
+        setSlaRate(Number(saved));
+        return;
+      }
+    }
+    setSlaRate(regionConfig.defaultRate);
+  }, [storageKey, regionConfig.defaultRate]);
+
+  const handleRateChange = (val: string) => {
+    const num = Math.max(0, Number(val) || 0);
+    setSlaRate(num);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(storageKey, String(num));
+    }
+  };
 
   // Safely read latest live telemetry point
   const latest = metrics.length > 0 ? metrics[metrics.length - 1] : null;
@@ -30,22 +66,21 @@ export default function EnterpriseModules({
   // Live Tier-1 Egress record (from Render Tier-1 Collector)
   const liveEgressRecord = egress?.records?.[0] || null;
 
-  // 1. FINOPS: Business Impact & Downtime Cost Calculator
+  // 1. FINOPS: Dynamic Per-Tenant Real-Time Business Impact Calculator
   const finops = useMemo(() => {
     const activeIncidents = Array.isArray(incidents) ? incidents.length : 0;
-    const baseRiskPerIncident = 22500; // ₹22,500/hr SLA exposure per correlated incident
-    const latencyPenalty = latency > 100 ? Math.round((latency - 100) * 120) : 0;
-    const hourlyRisk = activeIncidents * baseRiskPerIncident + latencyPenalty;
+    const loadFactor = (cpu * 0.4 + mem * 0.3 + Math.min(latency, 300) * 0.3) / 100;
+    const hourlyRisk = Math.round(activeIncidents * slaRate + slaRate * 0.25 * loadFactor);
     const status =
-      hourlyRisk === 0
+      hourlyRisk < slaRate * 0.4
         ? "Protected"
-        : hourlyRisk < 30000
+        : hourlyRisk < slaRate * 1.5
         ? "Moderate SLA Risk"
         : "High Revenue Risk";
     return { activeIncidents, hourlyRisk, status };
-  }, [incidents, latency]);
+  }, [incidents, cpu, mem, latency, slaRate]);
 
-  // 2. PROACTIVE AI: Predictive "Time-to-Crash" Trajectory
+  // 2. PROACTIVE AI: Real-Time Predictive "Time-to-Crash" Trajectory
   const prediction = useMemo(() => {
     if (!Array.isArray(metrics) || metrics.length < 5) {
       return {
@@ -84,6 +119,7 @@ export default function EnterpriseModules({
   // 3. ZERO-LEAK PROOF: Live Sanitized Cloud Payload
   const sanitizedPayload = liveEgressRecord?.egress_metadata_sent || {
     tenant_id: tenantName.toLowerCase().replace(/\s+/g, "_"),
+    region,
     collector_id: collectorId,
     cpu_percent: Number(cpu.toFixed(1)),
     memory_percent: Number(mem.toFixed(1)),
@@ -101,7 +137,7 @@ export default function EnterpriseModules({
       "        AEGIS AIOPS — COMPLIANCE & POST-MORTEM REPORT       ",
       "============================================================",
       `Generated (UTC):        ${nowUtc}`,
-      `Tenant Workspace:       ${tenantName}`,
+      `Tenant Workspace:       ${tenantName} (${region})`,
       `Active Tier-1 Agent:    ${collectorId}`,
       `Zero-Leak Status:       VERIFIED (No PII / Raw Logs in Cloud)`,
       "",
@@ -118,7 +154,8 @@ export default function EnterpriseModules({
       "",
       "--- 3. FINOPS BUSINESS IMPACT ---",
       `Correlated Incidents:   ${finops.activeIncidents}`,
-      `Estimated SLA Risk:     INR ${finops.hourlyRisk.toLocaleString("en-IN")} / hr`,
+      `Configured SLA / Inc:   ${regionConfig.code} ${slaRate.toLocaleString(regionConfig.locale)}`,
+      `Estimated SLA Risk:     ${regionConfig.code} ${finops.hourlyRisk.toLocaleString(regionConfig.locale)} / hr`,
       `Risk Classification:    ${finops.status}`,
       "",
       "--- 4. GOVERNANCE & HUMAN-IN-THE-LOOP ---",
@@ -131,7 +168,7 @@ export default function EnterpriseModules({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `aegis-compliance-report-${Date.now()}.txt`;
+    link.download = `aegis-report-${tenantName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.txt`;
     link.click();
     URL.revokeObjectURL(url);
 
@@ -148,7 +185,7 @@ export default function EnterpriseModules({
             Enterprise Intelligence &amp; Zero-Leak Governance
           </h2>
           <p className="text-xs text-slate-500">
-            FinOps SLA Risk • Proactive Crash Prediction • Live Privacy Proof • Audit Export
+            {tenantName} ({region}) • Dynamic FinOps • Proactive AI • Live Privacy Proof • Audit Export
           </p>
         </div>
 
@@ -160,7 +197,7 @@ export default function EnterpriseModules({
         </button>
       </div>
 
-      {/* Top Row: FinOps Cost Calculator + Predictive Time-to-Crash */}
+      {/* Top Row: Dynamic FinOps Cost Calculator + Predictive Time-to-Crash */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* FinOps Card */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
@@ -170,21 +207,38 @@ export default function EnterpriseModules({
             </span>
             <span
               className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                finops.hourlyRisk === 0
+                finops.status === "Protected"
                   ? "bg-emerald-50 text-emerald-700"
+                  : finops.status === "Moderate SLA Risk"
+                  ? "bg-amber-50 text-amber-700"
                   : "bg-rose-50 text-rose-700"
               }`}
             >
               {finops.status}
             </span>
           </div>
-          <div className="text-3xl font-bold text-slate-900 mt-1">
-            ₹{finops.hourlyRisk.toLocaleString("en-IN")}
-            <span className="text-sm font-medium text-slate-500"> / hr</span>
+
+          <div className="flex items-end justify-between gap-2 mt-1">
+            <div className="text-3xl font-bold text-slate-900">
+              {regionConfig.symbol}
+              {finops.hourlyRisk.toLocaleString(regionConfig.locale)}
+              <span className="text-sm font-medium text-slate-500"> / hr</span>
+            </div>
+            <label className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              <span>SLA/Inc ({regionConfig.symbol}):</span>
+              <input
+                type="number"
+                min={0}
+                value={slaRate}
+                onChange={(e) => handleRateChange(e.target.value)}
+                className="w-24 px-2 py-1 rounded-lg border border-slate-300 text-slate-800 font-mono text-xs focus:outline-none focus:border-teal-500"
+              />
+            </label>
           </div>
+
           <p className="text-xs text-slate-500 mt-2">
-            Calculated live from {finops.activeIncidents} correlated incident(s) and{" "}
-            {latency.toFixed(1)} ms network latency SLA exposure.
+            Live calculation from {finops.activeIncidents} incident(s), {cpu.toFixed(1)}% CPU,{" "}
+            {mem.toFixed(1)}% Mem, and {latency.toFixed(1)} ms latency.
           </p>
         </div>
 
@@ -243,7 +297,7 @@ export default function EnterpriseModules({
               <pre className="text-xs text-slate-700 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
                 {liveEgressRecord?.raw_local_only
                   ? JSON.stringify(liveEgressRecord.raw_local_only, null, 2)
-                  : `[WAITING FOR LIVE TIER-1 EGRESS STREAM...]\nSet NEXT_PUBLIC_TIER1_API in Vercel to your Render Tier-1 URL.`}
+                  : `[WAITING FOR LIVE TIER-1 EGRESS STREAM...]\nEnsure NEXT_PUBLIC_TIER1_API is set in Vercel to your Render Tier-1 URL.`}
               </pre>
             </div>
 
