@@ -66,13 +66,19 @@ export default function EnterpriseModules({
   // Live Tier-1 Egress record (from Render Tier-1 Collector)
   const liveEgressRecord = egress?.records?.[0] || null;
 
-  // 1. FINOPS: Dynamic Per-Tenant Real-Time Business Impact Calculator
+  // 1. FINOPS: ₹0 when healthy; only charges on active incidents or threshold breaches
   const finops = useMemo(() => {
     const activeIncidents = Array.isArray(incidents) ? incidents.length : 0;
-    const loadFactor = (cpu * 0.4 + mem * 0.3 + Math.min(latency, 300) * 0.3) / 100;
-    const hourlyRisk = Math.round(activeIncidents * slaRate + slaRate * 0.25 * loadFactor);
+
+    // Only count strain above healthy thresholds (CPU > 75%, Mem > 80%, Latency > 100ms)
+    const cpuExcess = Math.max(0, cpu - 75) / 25;
+    const memExcess = Math.max(0, mem - 80) / 20;
+    const latExcess = Math.max(0, latency - 100) / 200;
+    const breachFactor = cpuExcess * 0.4 + memExcess * 0.3 + latExcess * 0.3;
+
+    const hourlyRisk = Math.round(activeIncidents * slaRate + slaRate * breachFactor);
     const status =
-      hourlyRisk < slaRate * 0.4
+      hourlyRisk === 0
         ? "Protected"
         : hourlyRisk < slaRate * 1.5
         ? "Moderate SLA Risk"
