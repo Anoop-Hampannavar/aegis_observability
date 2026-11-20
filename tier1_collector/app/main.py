@@ -188,4 +188,5 @@ async def bind_tenant(payload: dict):
     REGION = payload.get("region", REGION)
     return {"status": "bound", "tenant_id": TENANT_ID, "region": REGION}
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    port = int(os.getenv("PORT", "8001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
