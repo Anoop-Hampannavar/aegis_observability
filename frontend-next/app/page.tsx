@@ -690,7 +690,7 @@ export default function AegisEnterprisePlatform() {
           );
         })}
       </nav>
-      <EnterpriseModules metrics={telemetry} incidents={incidents} />
+      <EnterpriseModules metrics={metrics} incidents={incidents} />
     </div>
     
   );
