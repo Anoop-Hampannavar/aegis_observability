@@ -13,7 +13,7 @@ import {
 import EnterpriseModules from "../components/EnterpriseModules";
 const SAAS_API = process.env.NEXT_PUBLIC_SAAS_API || "https://aegis-tier2-saas-da03.onrender.com";
 const SAAS_WS = process.env.NEXT_PUBLIC_SAAS_WS || "wss://aegis-tier2-saas-da03.onrender.com";
-const TIER1_API = process.env.NEXT_PUBLIC_TIER1_API || "https://your-tier1-render-url.onrender.com";
+const TIER1_API = process.env.NEXT_PUBLIC_TIER1_API || "https://aegis-tier1-collector.onrender.com/";
 interface User {
   username: string;
   tenant_id: string;
