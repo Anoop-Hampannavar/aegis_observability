@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "aegis-tier2-cloud"
+    scheme: https
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["aegis-tier2-saas-da03.onrender.com"]
