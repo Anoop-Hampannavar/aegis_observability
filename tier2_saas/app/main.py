@@ -9,9 +9,14 @@ import aiosqlite
 import numpy as np
 import uvicorn
 import os
-import database
-import auth
-import aiops
+import sys
+from pathlib import Path
+
+APP_DIR = str(Path(__file__).resolve().parent)
+if APP_DIR not in sys.path:
+    sys.path.insert(0, APP_DIR)
+
+from app import database, auth, aiops
 
 class ConnectionManager:
     def __init__(self):
