@@ -1,0 +1,11 @@
+fastapi
+pydantic
+aiosqlite
+numpy
+scikit-learn
+websockets
+PyJWT
+uvicorn[standard]
+
+
+
