@@ -5,6 +5,7 @@ import React, { useMemo, useState } from "react";
 interface EnterpriseModulesProps {
   metrics?: any[];
   incidents?: any[];
+  egress?: any;
   tenantName?: string;
   collectorId?: string;
 }
@@ -12,18 +13,22 @@ interface EnterpriseModulesProps {
 export default function EnterpriseModules({
   metrics = [],
   incidents = [],
+  egress = null,
   tenantName = "FinCorp India",
   collectorId = "col_nidasoshi_01",
 }: EnterpriseModulesProps) {
   const [showInspector, setShowInspector] = useState(true);
   const [exported, setExported] = useState(false);
 
-  // Safely read latest telemetry point regardless of exact field names
+  // Safely read latest live telemetry point
   const latest = metrics.length > 0 ? metrics[metrics.length - 1] : null;
   const cpu = Number(latest?.cpu_percent ?? latest?.cpu ?? latest?.compute_load ?? 0);
   const mem = Number(latest?.memory_percent ?? latest?.memory ?? latest?.mem_percent ?? 0);
   const latency = Number(latest?.network_latency_ms ?? latest?.latency_ms ?? latest?.latency ?? 0);
   const failedLogins = Number(latest?.failed_logins ?? latest?.auth_anomalies ?? 0);
+
+  // Live Tier-1 Egress record (from Render Tier-1 Collector)
+  const liveEgressRecord = egress?.records?.[0] || null;
 
   // 1. FINOPS: Business Impact & Downtime Cost Calculator
   const finops = useMemo(() => {
@@ -32,7 +37,11 @@ export default function EnterpriseModules({
     const latencyPenalty = latency > 100 ? Math.round((latency - 100) * 120) : 0;
     const hourlyRisk = activeIncidents * baseRiskPerIncident + latencyPenalty;
     const status =
-      hourlyRisk === 0 ? "Protected" : hourlyRisk < 30000 ? "Moderate SLA Risk" : "High Revenue Risk";
+      hourlyRisk === 0
+        ? "Protected"
+        : hourlyRisk < 30000
+        ? "Moderate SLA Risk"
+        : "High Revenue Risk";
     return { activeIncidents, hourlyRisk, status };
   }, [incidents, latency]);
 
@@ -72,8 +81,8 @@ export default function EnterpriseModules({
     };
   }, [metrics]);
 
-  // 3. ZERO-LEAK PROOF: Sanitized Cloud Payload Snapshot
-  const sanitizedPayload = {
+  // 3. ZERO-LEAK PROOF: Live Sanitized Cloud Payload
+  const sanitizedPayload = liveEgressRecord?.egress_metadata_sent || {
     tenant_id: tenantName.toLowerCase().replace(/\s+/g, "_"),
     collector_id: collectorId,
     cpu_percent: Number(cpu.toFixed(1)),
@@ -228,16 +237,13 @@ export default function EnterpriseModules({
                   TIER 1 (PRIVATE SERVER — BLOCKED FROM CLOUD)
                 </span>
                 <span className="text-[11px] font-semibold bg-rose-100 text-rose-700 px-2 py-0.5 rounded">
-                  PII Redacted
+                  PII Redacted: {liveEgressRecord?.secrets_redacted ?? 0}
                 </span>
               </div>
               <pre className="text-xs text-slate-700 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
-{`[RAW AUTH LOG - NEVER TRANSMITTED]
-user_email: "rahul.sharma@fincorp.in"
-client_ip:  "192.168.14.88"
-kyc_pan:    "ABCDE1234F"
-session_id: "sess_98a7f6c54e"
-status:     "FAILED_LOGIN_BURST"`}
+                {liveEgressRecord?.raw_local_only
+                  ? JSON.stringify(liveEgressRecord.raw_local_only, null, 2)
+                  : `[WAITING FOR LIVE TIER-1 EGRESS STREAM...]\nSet NEXT_PUBLIC_TIER1_API in Vercel to your Render Tier-1 URL.`}
               </pre>
             </div>
 
